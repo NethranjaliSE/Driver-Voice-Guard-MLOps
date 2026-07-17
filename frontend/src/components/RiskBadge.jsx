@@ -5,6 +5,7 @@ const RISK_META = {
   CAUTION: { label: "CAUTION", bg: "bg-yellow-500/15", text: "text-yellow-400", ring: "ring-yellow-500/40", dot: "bg-yellow-400" },
   WARNING: { label: "WARNING", bg: "bg-orange-500/15", text: "text-orange-400", ring: "ring-orange-500/40", dot: "bg-orange-400" },
   DANGER:  { label: "DANGER",  bg: "bg-red-500/15",    text: "text-red-400",    ring: "ring-red-500/40",    dot: "bg-red-400" },
+  CALIBRATING: { label: "CALIBRATING", bg: "bg-gray-500/15", text: "text-gray-400", ring: "ring-gray-500/40", dot: "bg-gray-400" },
 };
 
 export default function RiskBadge({ riskLevel = "SAFE", alertTriggered = false }) {

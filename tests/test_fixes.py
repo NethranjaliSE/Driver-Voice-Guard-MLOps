@@ -10,7 +10,7 @@ import pytest
 import soundfile as sf
 
 from features import extract_feature, is_speech, rms_energy
-from predict import EMOTION_TO_DRIVER, StateSmoother, map_emotion
+from predict import EMOTION_BEHAVIOR, StateSmoother
 
 SR = 22050
 
@@ -68,34 +68,36 @@ def test_rms_energy_of_silence_near_zero():
 
 
 # ---------------------------------------------------------------------------
-# 3. Emotion → driver-state mapping
+# 3. Emotion → behavior profile mapping
 # ---------------------------------------------------------------------------
 
-def test_happy_maps_to_alert_not_stressed():
-    state, safety = map_emotion("happy")
-    assert state == "alert"
-    assert safety == 90
+def test_all_eight_emotions_have_profiles():
+    expected = {"neutral", "calm", "happy", "sad", "angry", "fearful", "disgust", "surprised"}
+    assert set(EMOTION_BEHAVIOR.keys()) == expected
+    required_keys = {
+        "driver_state", "safety_score", "risk_level", "emoji",
+        "headline", "description", "suggestion", "car_actions",
+    }
+    for emotion, profile in EMOTION_BEHAVIOR.items():
+        assert required_keys <= set(profile.keys()), f"{emotion} missing keys"
 
 
-def test_disgust_maps_to_stressed():
-    state, safety = map_emotion("disgust")
-    assert state == "stressed"
-    assert safety == 60
+def test_happy_is_safe_not_stressed():
+    profile = EMOTION_BEHAVIOR["happy"]
+    assert profile["driver_state"] == "energetic"
+    assert profile["risk_level"] == "SAFE"
+    assert profile["safety_score"] == 82
 
 
-def test_full_mapping_table():
-    assert EMOTION_TO_DRIVER["calm"] == ("alert", 100)
-    assert EMOTION_TO_DRIVER["happy"] == ("alert", 90)
-    assert EMOTION_TO_DRIVER["fearful"] == ("stressed", 65)
-    assert EMOTION_TO_DRIVER["disgust"] == ("stressed", 60)
+def test_danger_emotions():
+    assert EMOTION_BEHAVIOR["angry"]["risk_level"] == "DANGER"
+    assert EMOTION_BEHAVIOR["fearful"]["risk_level"] == "DANGER"
 
 
-def test_driver_state_classes_map_to_themselves():
-    # driver_model.pkl predicts driver states directly — they must pass
-    # through the mapping unchanged.
-    assert map_emotion("alert")[0] == "alert"
-    assert map_emotion("angry")[0] == "angry"
-    assert map_emotion("stressed")[0] == "stressed"
+def test_caution_emotions():
+    assert EMOTION_BEHAVIOR["sad"]["risk_level"] == "CAUTION"
+    assert EMOTION_BEHAVIOR["disgust"]["risk_level"] == "CAUTION"
+    assert EMOTION_BEHAVIOR["surprised"]["risk_level"] == "CAUTION"
 
 
 # ---------------------------------------------------------------------------

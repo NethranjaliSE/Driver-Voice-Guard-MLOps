@@ -264,6 +264,10 @@ def train(data_path: str, extra_data_path: str, params: dict, grid_search: bool 
                     learning_rate=params["learning_rate"],
                     random_state=params["random_state"],
                     epsilon=1e-8,
+                    # NOTE: MLPClassifier does NOT support class_weight —
+                    # passing it raises TypeError. RAVDESS is near-balanced
+                    # (only neutral has half the samples), so no reweighting
+                    # is applied.
                 )),
             ])
             model.fit(x_train, y_train)

@@ -2,34 +2,23 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { STATE_META } from "../theme";
 
-// Suggested in-car actions per detected driver state.
-// These are simulated suggestions — nothing is sent to a real vehicle.
-const STATE_ACTIONS = {
-  alert: [
-    { id: "keep-music", icon: "🎵", label: "Keep the current music playing" },
-    { id: "route-ok", icon: "🗺️", label: "Continue on the current route" },
-  ],
-  drowsy: [
-    { id: "energetic-music", icon: "🎵", label: "Play energetic music" },
-    { id: "ac-cool", icon: "❄️", label: "Set AC to cool (18°C)" },
-    { id: "window", icon: "🪟", label: "Open the window slightly — fresh air" },
-    { id: "coffee-stop", icon: "☕", label: "Show the nearest rest area / coffee shop" },
-  ],
-  stressed: [
-    { id: "soft-music", icon: "🎵", label: "Play soft music" },
-    { id: "ac-comfort", icon: "❄️", label: "Set AC to comfortable (24°C)" },
-    { id: "breathing", icon: "🧘", label: "Start a breathing exercise" },
-    { id: "silence-calls", icon: "📵", label: "Silence calls / notifications" },
-  ],
-  angry: [
-    { id: "calm-music", icon: "🎵", label: "Play calm music" },
-    { id: "ac-cool-angry", icon: "❄️", label: "Set AC to cool" },
-    { id: "break", icon: "⏸️", label: "Take a 5-minute break — stop somewhere safe" },
-    { id: "easy-route", icon: "🗺️", label: "Find a route with less traffic" },
-  ],
-};
+// Icons inferred from the backend's car_action text.
+function iconFor(action) {
+  const a = action.toLowerCase();
+  if (a.includes("music")) return "🎵";
+  if (a.includes("breathing")) return "🧘";
+  if (a.includes("silence")) return "🔕";
+  if (a.includes("window")) return "🪟";
+  if (a.includes("hazard")) return "⚠️";
+  if (a.includes("cruise")) return "🚗";
+  if (a.includes("distance")) return "↔️";
+  if (a.includes("ac")) return "❄️";
+  return "🔧";
+}
 
-export default function DriverActions({ state }) {
+// Suggested in-car actions from the detected emotion's behavior profile.
+// These are simulated suggestions — nothing is sent to a real vehicle.
+export default function DriverActions({ state, actions = [] }) {
   const [applied, setApplied] = useState({});
   const [prevState, setPrevState] = useState(state);
 
@@ -39,7 +28,6 @@ export default function DriverActions({ state }) {
     setApplied({});
   }
 
-  const actions = STATE_ACTIONS[state] || [];
   const meta = STATE_META[state];
 
   return (
@@ -57,26 +45,32 @@ export default function DriverActions({ state }) {
         </p>
       )}
 
-      {state && (
+      {state && actions.length === 0 && (
+        <p className="text-gray-500 text-sm">
+          {meta?.emoji} No actions needed for <span className="font-semibold" style={{ color: meta?.color }}>{state.replace("_", " ")}</span> — keep driving safely.
+        </p>
+      )}
+
+      {state && actions.length > 0 && (
         <>
           <p className="text-sm text-gray-400">
             <span className="mr-1">{meta?.emoji}</span>
-            Driver&apos;s mood is <span className="font-semibold" style={{ color: meta?.color }}>{state}</span> —
+            Driver&apos;s state is <span className="font-semibold" style={{ color: meta?.color }}>{state.replace("_", " ")}</span> —
             want to try these actions?
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <AnimatePresence mode="popLayout">
-              {actions.map((a) => {
-                const done = applied[a.id];
+              {actions.map((action) => {
+                const done = applied[action];
                 return (
                   <motion.button
-                    key={a.id}
+                    key={action}
                     layout
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    onClick={() => setApplied((p) => ({ ...p, [a.id]: true }))}
+                    onClick={() => setApplied((p) => ({ ...p, [action]: true }))}
                     disabled={done}
                     className={`flex items-center gap-3 text-left px-4 py-3 rounded-xl border text-sm transition-colors ${
                       done
@@ -84,8 +78,8 @@ export default function DriverActions({ state }) {
                         : "bg-gray-800/60 border-gray-700 text-gray-200 hover:bg-gray-800 hover:border-gray-600"
                     }`}
                   >
-                    <span className="text-xl shrink-0">{done ? "✅" : a.icon}</span>
-                    <span className="flex-1">{a.label}</span>
+                    <span className="text-xl shrink-0">{done ? "✅" : iconFor(action)}</span>
+                    <span className="flex-1">{action}</span>
                     {done && <span className="text-[10px] uppercase tracking-wide text-green-400 shrink-0">done</span>}
                   </motion.button>
                 );

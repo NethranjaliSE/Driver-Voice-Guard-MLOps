@@ -19,34 +19,118 @@ from features import extract_feature
 _MODEL_PATH = Path(__file__).parent.parent / "models" / "driver_model.pkl"
 _META_PATH  = Path(__file__).parent.parent / "models" / "model_meta.yaml"
 
-# Raw RAVDESS emotion → (driver state, baseline safety score). Used when the
-# loaded model predicts raw emotions (the old ser_model.pkl). The current
-# driver_model.pkl predicts driver states directly, which map to themselves
-# via STATE_SAFETY below — so both model generations work.
-EMOTION_TO_DRIVER = {
-    "calm":    ("alert",    100),
-    "happy":   ("alert",     90),
-    "fearful": ("stressed",  65),
-    "disgust": ("stressed",  60),
-    "neutral": ("alert",    100),
-    "surprised": ("stressed", 65),
-}
-
-# Driver-state classes map to themselves. Scores mirror api/main.py's
-# SAFETY_WEIGHTS so both layers tell the same story.
-STATE_SAFETY = {"alert": 100, "stressed": 65, "angry": 40, "drowsy": 20}
-
 # Below this confidence the prediction is treated as unreliable and reported
-# as "calibrating" instead of a driver state.
+# as "calibrating" instead of an emotion.
 MIN_CONFIDENCE = 60.0
 CALIBRATING_SAFETY = 80
 
-
-def map_emotion(raw: str) -> tuple:
-    """Map a raw model class to (driver_state, baseline_safety_score)."""
-    if raw in EMOTION_TO_DRIVER:
-        return EMOTION_TO_DRIVER[raw]
-    return raw, STATE_SAFETY.get(raw, 50)
+# Each of the 8 emotions maps to a complete driver behavior profile
+EMOTION_BEHAVIOR = {
+    "neutral": {
+        "driver_state":   "focused",
+        "safety_score":   95,
+        "risk_level":     "SAFE",
+        "emoji":          "😐",
+        "headline":       "Focused and composed",
+        "description":    "Your voice is calm and neutral — ideal state for driving.",
+        "suggestion":     "Keep it up. Stay hydrated and take breaks every 2 hours.",
+        "car_actions":    [],
+    },
+    "calm": {
+        "driver_state":   "relaxed",
+        "safety_score":   100,
+        "risk_level":     "SAFE",
+        "emoji":          "😌",
+        "headline":       "Perfectly relaxed",
+        "description":    "You sound completely at ease — the best possible driving state.",
+        "suggestion":     "Excellent. You are in full control.",
+        "car_actions":    ["Play ambient music"],
+    },
+    "happy": {
+        "driver_state":   "energetic",
+        "safety_score":   82,
+        "risk_level":     "SAFE",
+        "emoji":          "😄",
+        "headline":       "Positive and energetic",
+        "description":    "Good mood detected. Positive drivers are generally safer — "
+                          "just watch your speed as excitement can increase it.",
+        "suggestion":     "Great energy! Stay mindful of speed limits.",
+        "car_actions":    ["Play upbeat music", "Set cruise control reminder"],
+    },
+    "sad": {
+        "driver_state":   "low_mood",
+        "safety_score":   55,
+        "risk_level":     "CAUTION",
+        "emoji":          "😢",
+        "headline":       "Low mood detected",
+        "description":    "Sadness slows reaction time and reduces concentration. "
+                          "Drivers in low mood are 10x more likely to have accidents.",
+        "suggestion":     "Consider pulling over for 5 minutes. Call someone you trust.",
+        "car_actions":    [
+            "Play soft music",
+            "Set AC to comfortable (23°C)",
+            "Silence notifications",
+        ],
+    },
+    "angry": {
+        "driver_state":   "agitated",
+        "safety_score":   28,
+        "risk_level":     "DANGER",
+        "emoji":          "😠",
+        "headline":       "High agitation — road rage risk",
+        "description":    "Anger is one of the leading causes of fatal accidents. "
+                          "Aggressive driving decisions are made in this state.",
+        "suggestion":     "Ease off the accelerator. Take 3 deep breaths right now.",
+        "car_actions":    [
+            "Play calm music",
+            "Set AC to cool (20°C)",
+            "Start breathing exercise",
+            "Silence calls / notifications",
+        ],
+    },
+    "fearful": {
+        "driver_state":   "anxious",
+        "safety_score":   22,
+        "risk_level":     "DANGER",
+        "emoji":          "😨",
+        "headline":       "Panic or anxiety detected",
+        "description":    "Fear or panic severely impairs decision-making and "
+                          "causes erratic vehicle control.",
+        "suggestion":     "Pull over safely when possible. Do not continue driving in panic.",
+        "car_actions":    [
+            "Play calming music",
+            "Start breathing exercise",
+            "Set AC to comfortable (22°C)",
+            "Activate hazard lights reminder",
+        ],
+    },
+    "disgust": {
+        "driver_state":   "uncomfortable",
+        "safety_score":   52,
+        "risk_level":     "CAUTION",
+        "emoji":          "🤢",
+        "headline":       "Discomfort or irritation detected",
+        "description":    "Disgust or discomfort creates distraction and "
+                          "reduces focus on the road ahead.",
+        "suggestion":     "Identify what is bothering you. Pull over if discomfort persists.",
+        "car_actions":    [
+            "Adjust AC temperature",
+            "Open windows for fresh air",
+            "Silence notifications",
+        ],
+    },
+    "surprised": {
+        "driver_state":   "startled",
+        "safety_score":   68,
+        "risk_level":     "CAUTION",
+        "emoji":          "😲",
+        "headline":       "Startled response detected",
+        "description":    "Surprise causes a momentary loss of focus. "
+                          "Recovery usually takes 2-3 seconds.",
+        "suggestion":     "Refocus on the road. Increase following distance briefly.",
+        "car_actions":    ["Increase following distance alert"],
+    },
+}
 
 
 class StateSmoother:
@@ -171,19 +255,9 @@ class DriverStatePredictor:
 
     def predict(self, audio_source) -> dict:
         """
-        Predict driver state from audio bytes, a file path, or a pre-loaded
-        (samples, sample_rate) tuple.
-
-        Returns:
-            {
-                "emotion":        str,    # raw model class
-                "state":          str,    # mapped driver state, or "calibrating"
-                "confidence":     float,  # 0-100, 1 decimal
-                "safety_score":   int,
-                "all_scores":     {class: probability*100, ...},
-                "smoothed_state": str,    # rolling 2-of-3 majority
-                "is_stable":      bool,   # last 3 chunks all agree
-            }
+        Predict the driver's emotion from audio bytes, a file path, or a
+        pre-loaded (samples, sample_rate) tuple, and attach the full
+        behavior profile for the predicted emotion.
         """
         if self._model is None:
             raise ModelNotTrainedError(
@@ -197,41 +271,77 @@ class DriverStatePredictor:
         proba    = self._model.predict_proba(features)[0]
         classes  = self._model.classes_.tolist()
 
-        scores = {
+        # All 8 emotion scores (0-100)
+        all_scores = {
             cls: round(float(p) * 100, 2)
             for cls, p in zip(classes, proba)
         }
 
-        state, safety_score = map_emotion(raw)
-        confidence = float(max(proba)) * 100
+        confidence = round(float(max(proba)) * 100, 1)
 
-        # Calibration baseline: remember the driver's first 3 states; when a
-        # later prediction matches that baseline, boost confidence by 10%
-        # (the model agreeing with the session's established normal is a
-        # weak extra signal).
+        # Get full behavior profile for the predicted emotion
+        behavior = EMOTION_BEHAVIOR.get(raw, {
+            "driver_state":  "unknown",
+            "safety_score":  50,
+            "risk_level":    "CAUTION",
+            "emoji":         "❓",
+            "headline":      "Uncertain",
+            "description":   "Could not determine driver state.",
+            "suggestion":    "Please try again.",
+            "car_actions":   [],
+        })
+
+        # Baseline calibration
         if self._baseline_state is None:
-            self._baseline_samples.append(state)
+            self._baseline_samples.append(raw)
             if len(self._baseline_samples) == 3:
-                self._baseline_state = Counter(self._baseline_samples).most_common(1)[0][0]
+                self._baseline_state = Counter(
+                    self._baseline_samples
+                ).most_common(1)[0][0]
                 logger.info(f"Calibration baseline set: {self._baseline_state}")
-        elif state == self._baseline_state:
+        elif raw == self._baseline_state:
             confidence = min(100.0, confidence * 1.1)
 
-        smoothed_state = self.smoother.update(state)
+        # Smoothing
+        smoothed = self.smoother.update(raw)
         is_stable = self.smoother.is_stable
 
+        # Confidence gate
         if confidence < MIN_CONFIDENCE:
-            state = "calibrating"
-            safety_score = CALIBRATING_SAFETY
+            return {
+                "emotion":       "calibrating",
+                "smoothed":      smoothed,
+                "confidence":    confidence,
+                "safety_score":  CALIBRATING_SAFETY,
+                "risk_level":    "CALIBRATING",
+                "driver_state":  "calibrating",
+                "emoji":         "⏳",
+                "headline":      "Calibrating...",
+                "description":   "Listening to your voice to establish a baseline.",
+                "suggestion":    "Please keep speaking naturally.",
+                "car_actions":   [],
+                "all_scores":    all_scores,
+                "is_stable":     is_stable,
+                "alert_triggered": False,
+            }
+
+        alert_triggered = behavior["risk_level"] in ("DANGER",)
 
         return {
-            "emotion": raw,
-            "state": state,
-            "confidence": round(confidence, 1),
-            "safety_score": int(safety_score),
-            "all_scores": scores,
-            "smoothed_state": smoothed_state,
-            "is_stable": is_stable,
+            "emotion":          raw,
+            "smoothed":         smoothed,
+            "confidence":       confidence,
+            "safety_score":     behavior["safety_score"],
+            "risk_level":       behavior["risk_level"],
+            "driver_state":     behavior["driver_state"],
+            "emoji":            behavior["emoji"],
+            "headline":         behavior["headline"],
+            "description":      behavior["description"],
+            "suggestion":       behavior["suggestion"],
+            "car_actions":      behavior["car_actions"],
+            "all_scores":       all_scores,
+            "is_stable":        is_stable,
+            "alert_triggered":  alert_triggered,
         }
 
     def reset_session_state(self):

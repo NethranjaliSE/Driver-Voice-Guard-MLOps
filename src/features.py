@@ -18,21 +18,24 @@ from typing import Optional
 LAST_FEATURE_STATS = deque(maxlen=10)
 
 
-# Maps RAVDESS 3rd-segment code → driver state
-# Using ALL 8 codes so no files are wasted
-RAVDESS_TO_DRIVER = {
-    "01": "alert",     # neutral   → focused, calm driver
-    "02": "alert",     # calm      → focused, calm driver
-    "03": "alert",     # happy     → positive, fine to drive
-    "04": "stressed",  # sad       → low mood, reduced focus
-    "05": "angry",     # angry     → road rage risk
-    "06": "stressed",  # fearful   → anxious, tense
-    "07": "stressed",  # disgust   → uncomfortable, distracted
-    "08": "stressed",  # surprised → startled, tense
+# Maps RAVDESS filename code → raw emotion name
+# Train on all 8 original classes — no grouping, no information loss
+RAVDESS_EMOTIONS = {
+    "01": "neutral",
+    "02": "calm",
+    "03": "happy",
+    "04": "sad",
+    "05": "angry",
+    "06": "fearful",
+    "07": "disgust",
+    "08": "surprised",
 }
 
-# Only 3 classes — no "drowsy" because we have no drowsy training data
-OBSERVED_EMOTIONS = ["alert", "stressed", "angry"]
+# All 8 classes used in training
+OBSERVED_EMOTIONS = [
+    "neutral", "calm", "happy", "sad",
+    "angry", "fearful", "disgust", "surprised"
+]
 
 
 def _ensure_ffmpeg_on_path() -> None:
@@ -352,13 +355,13 @@ def augment_audio(y: np.ndarray, sr: int) -> list:
 
 def get_emotion_from_filename(file_name: str):
     """
-    Parse RAVDESS filename and return the driver state label.
-    RAVDESS format: 03-01-05-01-02-01-12.wav
-    The 3rd segment (index 2) is the emotion code.
-    Returns None if filename cannot be parsed or code is unknown.
+    Parse RAVDESS filename and return the raw emotion label.
+    Format: 03-01-05-01-02-01-12.wav
+    3rd segment (index 2) = emotion code.
+    Returns None if unparseable.
     """
     try:
         code = Path(file_name).stem.split("-")[2]
-        return RAVDESS_TO_DRIVER.get(code)
+        return RAVDESS_EMOTIONS.get(code)
     except (IndexError, AttributeError):
         return None

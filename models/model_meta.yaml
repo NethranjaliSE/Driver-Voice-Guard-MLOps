@@ -1,11 +1,21 @@
-accuracy: 0.7895833333333333
+accuracy: 0.6486111111111111
 configured_emotions:
-- alert
-- stressed
+- neutral
+- calm
+- happy
+- sad
 - angry
+- fearful
+- disgust
+- surprised
 emotions:
-- alert
 - angry
-- stressed
+- calm
+- disgust
+- fearful
+- happy
+- neutral
+- sad
+- surprised
 n_features: 263
-run_id: 929301e9d41448a2abf8a01bb13c184d
+run_id: 61c0c01e9f49467e9b38c8c3b5bd3bf8

@@ -60,51 +60,14 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Driver-safety scoring
+# Analysis pipeline
 # ---------------------------------------------------------------------------
-
-# Weighted-average inputs (0-100). Not empirically calibrated — a starting
-# point for a prototype, not a validated safety model.
-SAFETY_WEIGHTS = {"alert": 100, "stressed": 65, "angry": 40, "drowsy": 20}
-
-# Mirrors the timeline colour bands (green 80+, amber 50-80, red <50),
-# split into the four RiskBadge levels the frontend shows.
-RISK_THRESHOLDS = [(80, "SAFE"), (65, "CAUTION"), (50, "WARNING")]
-
-
-def _safety_score(all_scores: dict) -> int:
-    weighted = sum(SAFETY_WEIGHTS.get(state, 50) * (score / 100) for state, score in all_scores.items())
-    return round(max(0, min(100, weighted)))
-
-
-def _risk_level(safety_score: int) -> str:
-    for threshold, level in RISK_THRESHOLDS:
-        if safety_score >= threshold:
-            return level
-    return "DANGER"
-
-
-def _alert_triggered(all_scores: dict) -> bool:
-    return all_scores.get("drowsy", 0) > 60 or all_scores.get("angry", 0) > 70
-
-
-def _recommendation(state: str, risk_level: str, alert_triggered: bool) -> str:
-    if alert_triggered and state == "drowsy":
-        return "Signs of drowsiness detected — please pull over and rest."
-    if alert_triggered and state == "angry":
-        return "High agitation detected — ease off, take a breath."
-    if risk_level == "DANGER":
-        return "Vocal state indicates significant risk — consider stopping safely."
-    if risk_level == "WARNING":
-        return "Rising stress detected — consider taking a break soon."
-    if risk_level == "CAUTION":
-        return "Stay mindful — your tone suggests some tension."
-    return "You're driving in a focused, alert state."
-
 
 # Chunks quieter than this RMS are treated as silence and never reach the
 # model — an MLP fed a silent chunk happily returns a confident garbage state.
-SILENCE_RMS_THRESHOLD = 0.008
+# Kept low (0.002): RAVDESS studio clips sit around RMS 0.004, and true
+# mic-silence chunks measure well under 0.002.
+SILENCE_RMS_THRESHOLD = 0.002
 
 # Rolling record of recent predictions for GET /predict/debug.
 _DEBUG_LOG = deque(maxlen=10)
@@ -120,70 +83,40 @@ def _analyze(audio_bytes: bytes) -> dict:
     if rms <= SILENCE_RMS_THRESHOLD:
         print(f"[predict] silence gate: rms={rms:.5f} <= {SILENCE_RMS_THRESHOLD} — chunk skipped")
         return {
-            "state": "calibrating",
+            "emotion": "silence",
+            "smoothed": "calibrating",
             "confidence": 0.0,
-            "all_scores": {},
             "safety_score": CALIBRATING_SAFETY,
-            "risk_level": _risk_level(CALIBRATING_SAFETY),
-            "alert_triggered": False,
-            "recommendation": "No speech detected — monitoring continues.",
-            "smoothed_state": "calibrating",
+            "risk_level": "CALIBRATING",
+            "driver_state": "calibrating",
+            "emoji": "🤫",
+            "headline": "No speech detected",
+            "description": "The last chunk was silent — monitoring continues.",
+            "suggestion": "Speak naturally; analysis resumes when your voice is heard.",
+            "car_actions": [],
+            "all_scores": {},
             "is_stable": False,
-            "raw_emotion": "silence",
+            "alert_triggered": False,
             "rms_energy": round(rms, 5),
         }
 
     result = predictor.predict(audio)
+    result["rms_energy"] = round(rms, 5)
     print(
-        f"[predict] emotion={result['emotion']} state={result['state']} "
-        f"smoothed={result['smoothed_state']} conf={result['confidence']:.1f} "
-        f"rms={rms:.5f} stable={result['is_stable']}"
+        f"[predict] emotion={result['emotion']} smoothed={result['smoothed']} "
+        f"state={result['driver_state']} conf={result['confidence']:.1f} "
+        f"risk={result['risk_level']} rms={rms:.5f} stable={result['is_stable']}"
     )
     _DEBUG_LOG.append({
         "timestamp": datetime.utcnow().isoformat(),
-        "raw_emotion": result["emotion"],
-        "state": result["state"],
-        "smoothed_state": result["smoothed_state"],
+        "emotion": result["emotion"],
+        "smoothed": result["smoothed"],
+        "driver_state": result["driver_state"],
         "confidence": result["confidence"],
-        "rms_energy": round(rms, 5),
+        "rms_energy": result["rms_energy"],
         "is_stable": result["is_stable"],
     })
-
-    # Low-confidence chunks report "calibrating" rather than a driver state.
-    if result["state"] == "calibrating":
-        return {
-            "state": "calibrating",
-            "confidence": result["confidence"],
-            "all_scores": result["all_scores"],
-            "safety_score": CALIBRATING_SAFETY,
-            "risk_level": _risk_level(CALIBRATING_SAFETY),
-            "alert_triggered": False,
-            "recommendation": "Signal unclear — keep speaking normally while the system calibrates.",
-            "smoothed_state": "calibrating",
-            "is_stable": False,
-            "raw_emotion": result["emotion"],
-            "rms_energy": round(rms, 5),
-        }
-
-    # The UI shows the smoothed state so single misread chunks don't flip
-    # the dashboard; the raw per-chunk class stays in raw_emotion.
-    display_state = result["smoothed_state"]
-    safety_score = _safety_score(result["all_scores"])
-    risk_level = _risk_level(safety_score)
-    alert_triggered = _alert_triggered(result["all_scores"])
-    return {
-        "state": display_state,
-        "confidence": result["confidence"],
-        "all_scores": result["all_scores"],
-        "safety_score": safety_score,
-        "risk_level": risk_level,
-        "alert_triggered": alert_triggered,
-        "recommendation": _recommendation(display_state, risk_level, alert_triggered),
-        "smoothed_state": result["smoothed_state"],
-        "is_stable": result["is_stable"],
-        "raw_emotion": result["emotion"],
-        "rms_energy": round(rms, 5),
-    }
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -271,9 +204,9 @@ async def analyze_voice(file: UploadFile = File(...)):
         raise HTTPException(status_code=422, detail=f"Could not process audio: {e}")
 
     latency_ms = (time.time() - t0) * 1000
-    REQUEST_COUNT.labels(state=analysis["state"]).inc()
+    REQUEST_COUNT.labels(state=analysis["driver_state"]).inc()
     REQUEST_LATENCY.observe(latency_ms / 1000)
-    log_prediction(analysis["state"], analysis["confidence"], analysis["safety_score"], latency_ms)
+    log_prediction(analysis["driver_state"], analysis["confidence"], analysis["safety_score"], latency_ms)
 
     return DriverStateResponse(**analysis, latency_ms=round(latency_ms, 1))
 
@@ -293,7 +226,7 @@ async def analyze_stream(file: UploadFile = File(...)):
         raise HTTPException(status_code=422, detail=f"Could not process audio: {e}")
 
     latency_ms = (time.time() - t0) * 1000
-    REQUEST_COUNT.labels(state=analysis["state"]).inc()
+    REQUEST_COUNT.labels(state=analysis["driver_state"]).inc()
     REQUEST_LATENCY.observe(latency_ms / 1000)
 
     return DriverStateResponse(**analysis, latency_ms=round(latency_ms, 1))
@@ -337,15 +270,15 @@ async def session_chunk(session_id: str, file: UploadFile = File(...)):
     try:
         session_store.add_chunk(session_id, {
             "timestamp": timestamp,
-            "state": analysis["state"],
+            "state": analysis["driver_state"],
             "confidence": analysis["confidence"],
             "safety_score": analysis["safety_score"],
             "alert_triggered": analysis["alert_triggered"],
         })
         session_store.add_prediction(session_id, {
             "timestamp": timestamp,
-            "raw_emotion": analysis["raw_emotion"],
-            "smoothed_state": analysis["smoothed_state"],
+            "raw_emotion": analysis["emotion"],
+            "smoothed_state": analysis["smoothed"],
             "confidence": analysis["confidence"],
             "safety_score": analysis["safety_score"],
             "rms_energy": analysis["rms_energy"],
@@ -357,7 +290,7 @@ async def session_chunk(session_id: str, file: UploadFile = File(...)):
             detail=f"Unknown session_id '{session_id}'. Call GET /session/start first.",
         )
 
-    REQUEST_COUNT.labels(state=analysis["state"]).inc()
+    REQUEST_COUNT.labels(state=analysis["driver_state"]).inc()
     REQUEST_LATENCY.observe(latency_ms / 1000)
 
     return DriverStateResponse(**analysis, latency_ms=round(latency_ms, 1))

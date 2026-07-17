@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from features import extract_feature, get_emotion_from_filename, OBSERVED_EMOTIONS, RAVDESS_TO_DRIVER
+from features import extract_feature, get_emotion_from_filename, OBSERVED_EMOTIONS, RAVDESS_EMOTIONS
 
 
 def make_wav_bytes(duration_s: float = 1.0, sr: int = 22050) -> bytes:
@@ -63,22 +63,22 @@ class TestExtractFeature:
 
 
 class TestGetEmotionFromFilename:
-    """Filenames map RAVDESS emotion codes directly to driver states."""
+    """Filenames map RAVDESS emotion codes to raw emotion names."""
 
     def test_mapped_emotions(self):
-        assert get_emotion_from_filename("03-01-02-01-01-01-01.wav") == "alert"      # calm
-        assert get_emotion_from_filename("03-01-03-01-01-01-01.wav") == "alert"      # happy
-        assert get_emotion_from_filename("03-01-06-01-01-01-01.wav") == "stressed"   # fearful
-        assert get_emotion_from_filename("03-01-07-01-01-01-01.wav") == "stressed"   # disgust
-        assert get_emotion_from_filename("03-01-05-01-01-01-01.wav") == "angry"      # angry
+        assert get_emotion_from_filename("03-01-01-01-01-01-01.wav") == "neutral"
+        assert get_emotion_from_filename("03-01-02-01-01-01-01.wav") == "calm"
+        assert get_emotion_from_filename("03-01-03-01-01-01-01.wav") == "happy"
+        assert get_emotion_from_filename("03-01-05-01-01-01-01.wav") == "angry"
+        assert get_emotion_from_filename("03-01-06-01-01-01-01.wav") == "fearful"
 
-    def test_all_eight_codes_map_to_a_state(self):
+    def test_all_eight_codes_map_to_an_emotion(self):
         # Every RAVDESS code is used — no training files are skipped.
         for code in ("01", "02", "03", "04", "05", "06", "07", "08"):
             fname = f"03-01-{code}-01-01-01-01.wav"
-            state = get_emotion_from_filename(fname)
-            assert state == RAVDESS_TO_DRIVER[code]
-            assert state in OBSERVED_EMOTIONS
+            emotion = get_emotion_from_filename(fname)
+            assert emotion == RAVDESS_EMOTIONS[code]
+            assert emotion in OBSERVED_EMOTIONS
 
     def test_unknown_returns_none(self):
         assert get_emotion_from_filename("invalid.wav") is None
@@ -86,8 +86,11 @@ class TestGetEmotionFromFilename:
 
 
 class TestObservedEmotions:
-    def test_driver_states(self):
-        assert set(OBSERVED_EMOTIONS) == {"alert", "stressed", "angry"}
+    def test_all_eight_emotions(self):
+        assert set(OBSERVED_EMOTIONS) == {
+            "neutral", "calm", "happy", "sad",
+            "angry", "fearful", "disgust", "surprised",
+        }
 
     def test_length(self):
-        assert len(OBSERVED_EMOTIONS) == 3
+        assert len(OBSERVED_EMOTIONS) == 8

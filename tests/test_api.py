@@ -23,13 +23,20 @@ def make_wav_bytes(duration_s: float = 1.0, sr: int = 22050, amplitude: float = 
 
 
 MOCK_RESULT = {
-    "emotion": "alert",
-    "state": "alert",
+    "emotion": "happy",
+    "smoothed": "happy",
     "confidence": 87.5,
-    "safety_score": 100,
-    "all_scores": {"alert": 87.5, "stressed": 6.5, "angry": 6.0},
-    "smoothed_state": "alert",
+    "safety_score": 82,
+    "risk_level": "SAFE",
+    "driver_state": "energetic",
+    "emoji": "😄",
+    "headline": "Positive and energetic",
+    "description": "Good mood detected.",
+    "suggestion": "Great energy! Stay mindful of speed limits.",
+    "car_actions": ["Play upbeat music", "Set cruise control reminder"],
+    "all_scores": {"happy": 87.5, "calm": 6.5, "neutral": 6.0},
     "is_stable": True,
+    "alert_triggered": False,
 }
 
 
@@ -76,12 +83,14 @@ class TestAnalyzeEndpoint:
         )
         assert res.status_code == 200
         data = res.json()
-        assert data["state"] == "alert"
+        assert data["emotion"] == "happy"
+        assert data["driver_state"] == "energetic"
+        assert data["headline"] == "Positive and energetic"
+        assert data["risk_level"] == "SAFE"
+        assert data["car_actions"] == ["Play upbeat music", "Set cruise control reminder"]
         assert "confidence" in data
         assert "all_scores" in data
-        assert "smoothed_state" in data
         assert "is_stable" in data
-        assert data["raw_emotion"] == "alert"
 
     def test_analyze_rejects_non_audio(self, client):
         res = client.post(
@@ -106,8 +115,9 @@ class TestAnalyzeEndpoint:
         )
         assert res.status_code == 200
         data = res.json()
-        assert data["state"] == "calibrating"
-        assert data["raw_emotion"] == "silence"
+        assert data["emotion"] == "silence"
+        assert data["driver_state"] == "calibrating"
+        assert data["risk_level"] == "CALIBRATING"
         assert data["confidence"] == 0.0
 
 
@@ -124,7 +134,7 @@ class TestSessionFlow:
 
         stats = client.get(f"/session/{session_id}/stats").json()
         assert stats["total_chunks"] == 1
-        assert stats["state_distribution"] == {"alert": 1}
+        assert stats["state_distribution"] == {"happy": 1}
         assert stats["stable_percentage"] == 100.0
         assert stats["average_confidence"] == pytest.approx(87.5)
 

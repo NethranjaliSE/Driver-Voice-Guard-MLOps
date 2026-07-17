@@ -103,7 +103,8 @@ export default function App() {
       const clip = {
         id: clipSeq,
         url: URL.createObjectURL(blob),
-        state: result.state,
+        state: result.driver_state,
+        emotion: result.emotion,
         confidence: result.confidence,
         safety_score: result.safety_score,
         time: new Date().toLocaleTimeString(),
@@ -129,8 +130,8 @@ export default function App() {
         [
           {
             id: alertSeq,
-            state: result.state,
-            recommendation: result.recommendation,
+            state: result.driver_state,
+            recommendation: result.suggestion,
             time: new Date().toLocaleTimeString(),
           },
           ...a,
@@ -230,18 +231,18 @@ export default function App() {
             <SafetyScoreGauge score={current?.safety_score ?? 100} />
           </div>
 
-          <DriverStateCard state={current?.state} allScores={current?.all_scores} />
+          <DriverStateCard result={current} />
 
           <div className="bg-gray-900 border border-gray-800 hover:border-gray-700/80 transition-colors rounded-2xl p-5 flex flex-col gap-3">
             <div className="text-xs text-gray-500 uppercase tracking-wide">Risk level</div>
             <RiskBadge riskLevel={current?.risk_level ?? "SAFE"} alertTriggered={current?.alert_triggered} />
-            <p className="text-sm text-gray-400">
-              {current?.recommendation ?? "Start monitoring to see live risk assessment."}
+            <p className="text-sm text-gray-400 italic">
+              {current?.suggestion ?? "Start monitoring to see live risk assessment."}
             </p>
           </div>
         </div>
 
-        <DriverActions state={current?.state} />
+        <DriverActions state={current?.driver_state} actions={current?.car_actions} />
 
         <EmotionTimeline timeline={timeline} />
 

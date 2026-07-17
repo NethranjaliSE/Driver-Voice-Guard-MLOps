@@ -7,7 +7,7 @@ import FileUpload from "./FileUpload";
 import SafetyScoreGauge from "./SafetyScoreGauge";
 import RiskBadge from "./RiskBadge";
 import DriverActions from "./DriverActions";
-import { STATE_META } from "../theme";
+import DriverStateCard from "./DriverStateCard";
 import { analyzeVoice } from "../api";
 
 // One-shot voice check: record a clip or upload an audio file, analyze it
@@ -30,7 +30,6 @@ export default function VoiceCheck() {
     }
   }
 
-  const meta = result ? STATE_META[result.state] : null;
 
   return (
     <div className="space-y-6">
@@ -55,45 +54,21 @@ export default function VoiceCheck() {
               <SafetyScoreGauge score={result.safety_score} />
             </div>
 
-            <div className="bg-gray-900 border border-gray-800 hover:border-gray-700/80 transition-colors rounded-2xl p-5 flex flex-col gap-3">
-              <div className="text-xs text-gray-500 uppercase tracking-wide">Detected state</div>
-              <div className="flex items-center gap-3">
-                <span className="text-4xl">{meta?.emoji ?? "❔"}</span>
-                <div>
-                  <div className="text-xl font-semibold" style={{ color: meta?.color }}>
-                    {result.state[0].toUpperCase() + result.state.slice(1)}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {result.confidence.toFixed(0)}% confidence · {result.latency_ms}ms
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-1.5 mt-1">
-                {Object.entries(result.all_scores)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([label, score]) => (
-                    <div key={label} className="flex items-center gap-2 text-xs">
-                      <span className="w-16 text-gray-400 capitalize">{label}</span>
-                      <div className="flex-1 h-1.5 rounded-full bg-gray-800 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${score}%`, backgroundColor: (STATE_META[label] || {}).color || "#6366f1" }}
-                        />
-                      </div>
-                      <span className="w-10 text-right text-gray-500 tabular-nums">{score.toFixed(0)}%</span>
-                    </div>
-                  ))}
-              </div>
-            </div>
+            <DriverStateCard result={result} />
 
             <div className="bg-gray-900 border border-gray-800 hover:border-gray-700/80 transition-colors rounded-2xl p-5 flex flex-col gap-3">
               <div className="text-xs text-gray-500 uppercase tracking-wide">Risk level</div>
               <RiskBadge riskLevel={result.risk_level} alertTriggered={result.alert_triggered} />
-              <p className="text-sm text-gray-400">{result.recommendation}</p>
+              <p className="text-sm text-gray-400 italic">{result.suggestion}</p>
+              <p className="text-xs text-gray-600">
+                Detected emotion: <span className="capitalize text-gray-400">{result.emotion}</span> ·{" "}
+                {result.confidence.toFixed(0)}% confidence
+                {result.latency_ms != null && <> · {result.latency_ms}ms</>}
+              </p>
             </div>
           </div>
 
-          <DriverActions state={result.state} />
+          <DriverActions state={result.driver_state} actions={result.car_actions} />
         </motion.div>
       )}
     </div>
