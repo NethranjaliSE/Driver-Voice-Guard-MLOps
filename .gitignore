@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.env
+
+# Models (track with DVC instead)
+models/*.pkl
+models/*.joblib
+
+# Data (track with DVC instead)
+data/raw/
+data/processed/
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# Logs
+logs/*.csv
+logs/*.log
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/

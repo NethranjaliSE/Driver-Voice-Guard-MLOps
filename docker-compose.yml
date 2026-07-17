@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.space
+    container_name: driver_safety_api
+    ports:
+      - "8000:7860"
+    volumes:
+      - ./models:/app/models
+      - ./logs:/app/logs
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - HF_TOKEN=${HF_TOKEN}
+      - HF_MODEL_REPO=${HF_MODEL_REPO}
+    depends_on:
+      - mlflow
+    restart: unless-stopped
+    healthcheck:
+      # No curl in the base image — use Python's stdlib instead.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7860/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.8.1
+    container_name: driver_safety_mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/mlflow/mlruns
+      - ./models:/mlflow/models
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow/mlruns/mlflow.db
+      --default-artifact-root /mlflow/models
+      --host 0.0.0.0
+      --port 5000
+    restart: unless-stopped
+
+volumes:
+  mlruns:

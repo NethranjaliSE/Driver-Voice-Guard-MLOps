@@ -1,0 +1,11 @@
+accuracy: 0.7895833333333333
+configured_emotions:
+- alert
+- stressed
+- angry
+emotions:
+- alert
+- angry
+- stressed
+n_features: 263
+run_id: 929301e9d41448a2abf8a01bb13c184d

@@ -1,0 +1,16 @@
+venv/
+.venv/
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env
+data/
+mlruns/
+logs/
+models/confusion_matrix.png
+.git/
+.github/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.env

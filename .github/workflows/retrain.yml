@@ -1,0 +1,52 @@
+name: Scheduled Re-train
+
+on:
+  schedule:
+    - cron: "0 2 * * 0"   # Every Sunday at 02:00 UTC
+  workflow_dispatch:       # Allow manual trigger
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsndfile1 ffmpeg
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pull data with DVC
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: dvc pull
+
+      - name: Train model
+        env:
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        run: python src/train.py --data-path data/raw --no-augment
+
+      - name: Evaluate and check accuracy gate
+        run: |
+          python src/evaluate.py --data-path data/raw
+          python scripts/accuracy_gate.py --threshold 0.65
+
+      - name: Commit updated model
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add models/
+          git diff --staged --quiet || git commit -m "chore: auto-retrain model [skip ci]"
+          git push
+
+      - name: Trigger production deploy
+        if: success()
+        run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"

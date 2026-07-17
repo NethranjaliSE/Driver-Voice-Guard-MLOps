@@ -1,0 +1,31 @@
+stages:
+  prepare:
+    cmd: python src/features.py
+    deps:
+      - data/raw
+      - src/features.py
+    outs:
+      - data/processed/features.npy
+      - data/processed/labels.npy
+
+  train:
+    cmd: python src/train.py --data-path data/raw
+    deps:
+      - data/raw
+      - src/train.py
+      - src/features.py
+    outs:
+      - models/ser_model.pkl
+    metrics:
+      - models/model_meta.yaml:
+          cache: false
+
+  evaluate:
+    cmd: python src/evaluate.py --data-path data/raw
+    deps:
+      - models/ser_model.pkl
+      - src/evaluate.py
+      - data/raw
+    outs:
+      - models/confusion_matrix.png:
+          cache: false

@@ -1,0 +1,42 @@
+# Combined frontend + backend image for Hugging Face Spaces (Docker SDK).
+# Uploaded to the Space repo as "Dockerfile" by scripts/deploy_space.py —
+# the Docker SDK expects that exact filename at the repo root.
+#
+# The model itself is NOT baked into this image. Set HF_MODEL_REPO (and
+# HF_TOKEN) as Space variables/secrets so src/predict.py downloads it from
+# the Hub at startup — see scripts/push_model_to_hub.py.
+
+# ---- Stage 1: build the React frontend ----
+FROM node:20-slim AS frontend-build
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+# No VITE_API_URL → api.js falls back to relative paths in a prod build,
+# since this same container serves both the frontend and the API.
+RUN npm run build
+
+# ---- Stage 2: backend, serving the API + the built frontend ----
+FROM python:3.10-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libsndfile1 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src/ ./src/
+COPY api/ ./api/
+COPY --from=frontend-build /app/frontend/dist ./frontend/dist
+
+RUN mkdir -p logs
+
+ENV PYTHONPATH=/app/src
+
+# Hugging Face Spaces' Docker SDK defaults to port 7860.
+EXPOSE 7860
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "7860"]

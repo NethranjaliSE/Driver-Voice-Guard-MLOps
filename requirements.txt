@@ -1,0 +1,43 @@
+# --- Core Audio Processing & ML ---
+librosa==0.10.1
+soundfile==0.12.1
+numpy==1.24.3
+scikit-learn==1.3.0
+scipy==1.11.3
+joblib==1.3.2
+
+# --- MLOps, Orchestration & Tracking ---
+mlflow==2.8.1
+dvc==3.28.0
+evidently>=0.4.16
+
+# --- AI / LLM ---
+huggingface_hub==1.20.1
+
+# --- API, Models & Validation (Modern Pydantic v2 Stack) ---
+pydantic==2.4.2
+pydantic-settings==2.0.3
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# --- Data Analysis & Visualization ---
+pandas==2.0.3
+matplotlib==3.7.3
+seaborn==0.13.2
+Pillow==10.4.0
+
+# --- PDF Report Generation ---
+reportlab==4.0.7
+
+# --- Testing & HTTP Clients ---
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
+requests==2.31.0
+
+# --- Utilities & Monitoring ---
+python-dotenv==1.0.0
+loguru==0.7.2
+prometheus-client==0.18.0
+PyYAML==6.0.1
