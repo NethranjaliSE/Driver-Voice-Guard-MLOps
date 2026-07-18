@@ -9,7 +9,7 @@ React dashboard.
 
 **This is a research prototype, not a certified safety device.** It must
 not be the sole signal for any real driving-safety decision. See
-[Evaluation & limitations](#evaluation--limitations).
+[Evaluation](#evaluation) and [Limitations](#limitations).
 
 ## Problem statement
 
@@ -91,16 +91,18 @@ Every file is used — nothing is discarded:
 | calm, happy, sad, angry, fearful, disgust, surprised | 192 each |
 
 Training applies **audio augmentation** (Gaussian noise, pitch shift,
-time stretch) for 4× the data — 5,760 training samples. RAVDESS is
-*acted* emotional speech recorded in a studio, not real driving audio —
-the single biggest limitation of this project.
+time stretch) for 4× the data — 5,760 samples total, split 4,320 train /
+1,440 test (stratified 75/25). RAVDESS is *acted* emotional speech
+recorded in a studio, not real driving audio — the single biggest
+limitation of this project.
 
 ## Models
 
-| Model | Classes | Features | Accuracy | Status |
+| Model | Classes | Features | Held-out accuracy | Status |
 |---|---|---|---|---|
 | `ser_model.pkl` (original SER) | calm / happy / fearful / disgust | 180 | — | legacy, unused |
-| 3-class grouped driver model | alert / stressed / angry | 263 | ~79–90% | superseded |
+| 3-class driver model (5 of 8 emotion codes) | alert / stressed / angry | 263 | 89.7% | superseded |
+| 3-class driver model (all 8 codes grouped) | alert / stressed / angry | 263 | 79.0% | superseded |
 | **`driver_model.pkl` (current)** | **all 8 RAVDESS emotions** | **263** | **65%** | **deployed** |
 
 The earlier approach grouped acoustically dissimilar emotions into shared
@@ -108,7 +110,9 @@ driver states *before* training (e.g. happy + calm + neutral → "alert"),
 which caused systematic misclassification. The current model trains on
 the 8 raw emotions directly — no information loss — and does the
 driver-state mapping *after* prediction, where it is transparent and
-adjustable without retraining.
+adjustable without retraining. The accuracies are not directly
+comparable: fewer, coarser classes make an easier task, which is why the
+3-class models score higher on paper while being less useful in practice.
 
 Architecture: `Pipeline(StandardScaler, MLPClassifier(hidden=(300,),
 alpha=0.01, batch_size=256, max_iter=500, adaptive LR))`, tracked with
