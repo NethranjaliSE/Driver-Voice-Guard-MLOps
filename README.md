@@ -1,14 +1,3 @@
----
-title: Driver Safety Monitor
-emoji: 🚗
-colorFrom: red
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
-short_description: Voice-based emotion-aware driver monitoring dashboard (research prototype).
----
-
 # Driver Safety Monitor
 
 A speech-emotion-recognition system turned into a live driver-safety
